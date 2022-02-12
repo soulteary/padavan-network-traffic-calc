@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Padavan 网络流量计算器 / Padavan Network Traffic Calculator</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+
+<body>
+    <h1>Padavan 网络流量计算器</h1>
+    <form id="container" style="width:310px;">
+        <fieldset>
+            <legend>输入:</legend>
+
+            <label for="type-daily">类型:</label>
+            <input type="radio" id="type-daily" name="type" value="0" checked>
+            <label for="type-daily">每日流量</label>
+            <input type="radio" id="type-monthly" name="type" value="1">
+            <label for="type-monthly">每月流量</label><br><br>
+
+            <label for="unit-kb">单位:</label>
+            <input type="radio" id="unit-kb" name="unit" value="0">
+            <label for="unit-kb">KB</label>
+            <input type="radio" id="unit-mb" name="unit" value="1">
+            <label for="unit-mb">MB</label>
+            <input type="radio" id="unit-gb" name="unit" value="2" checked>
+            <label for="unit-gb">GB</label>
+            <input type="radio" id="unit-tb" name="unit" value="3">
+            <label for="unit-tb">TB</label><br><br>
+
+            <label for="data">原始数据:</label><br>
+            <textarea id="data" name="data" cols="30" rows="10"></textarea><br>
+            <input id="calc" type="submit" value="计算">
+        </fieldset>
+    </form>
+
+    <hr />
+
+    <table id="result"></table>
+
+    <script>
+        (function () {
+            function calc(type, unit, datasets) {
+                function decode(n) {
+                    return [(((n >> 16) & 0xFF) + 1900), ((n >>> 8) & 0xFF), (n & 0xFF)];
+                }
+
+                function commaize(n) {
+                    let p = String(n);
+                    while ((n = n.replace(/(\d+)(\d{3})/g, '$1,$2')) != p) p = n;
+                    return n;
+                }
+
+                function humanize(n) {
+                    return commaize((n / Math.pow(1024, unit)).toFixed(2)) + [' KB', ' MB', ' GB', ' TB'][unit];
+                }
+
+                function pad(n) {
+                    return `0${n}`.slice(-2);
+                }
+
+                function format(year, month, day) {
+                    return day ? `${year}-${pad(month + 1)}-${pad(day)}` : `${year}-${pad(month + 1)}`
+                }
+
+                function fragment(type, datasets) {
+                    const thead = ['<thead><tr><th>日期</th><th>下行</th><th>上行</th><th>总计</th></tr><thead>', '<tbody>'];
+                    let sum = [0, 0];
+                    const tbody = datasets.length ? datasets.map((data) => {
+                        const [date, dl, ul] = data;
+                        const [year, month, day] = decode(date);
+                        const time = type === 0 ? format(year, month, day) : format(year, month);
+                        sum[0] += dl; sum[1] += ul;
+                        return `<tr><td>${time}</td><td>${humanize(dl)}</td><td>${humanize(ul)}</td><td>${humanize(dl + ul)}</td></tr>`
+                    }) : ['<tr><td colspan="4">请检查数据类型是否选择正确，以及检查数据格式是否正确。</td></tr>'];
+                    const tfoot = ['</tbody>', `<tfoot><tr><th>总计</th><th>${humanize(sum[0])}</th><th>${humanize(sum[1])}</th><th>${humanize(sum[1] + sum[0])}</th></tr><tfoot>`];
+                    return thead.concat(tbody).concat(tfoot).join('');
+                }
+                return fragment(type, datasets)
+            }
+
+            const submit = document.getElementById('calc');
+            const notice = [
+                "<tbody>",
+                "<tr><td>请输入有效数据。例如带变量声明的代码片段：</td></tr>",
+                "<tr><td><code>daily_history = [...];</code></td></tr>",
+                "<tr><td>或纯粹的数组代码片段：</td></tr>",
+                "<tr><td><code>[...]</code></td></tr>",
+                "</tbody>",
+            ].join("");
+            submit.addEventListener('click', (e) => {
+                e.preventDefault();
+                const formData = new FormData(document.getElementById('container'));
+                const type = parseInt(formData.get('type'), 10);
+                const unit = parseInt(formData.get('unit'), 10);
+                const input = formData.get('data').trim();
+                const result = document.getElementById('result');
+                if (!input.length) {
+                    result.innerHTML = notice;
+                    return;
+                }
+                result.innerHTML = "";
+
+                var monthly_history = null;
+                var daily_history = null;
+                var data = [];
+                try {
+                    if (input.indexOf("_history") > -1) {
+                        eval(input);
+                        if (type === 0) {
+                            if (daily_history) data = daily_history;
+                        } else {
+                            if (monthly_history) data = monthly_history;
+                        }
+                    } else {
+                        data = eval(input);
+                    }
+                } catch (e) {
+                    result.innerHTML = notice;
+                    return;
+                }
+                result.innerHTML = calc(type, unit, data);
+            });
+        }());
+    </script>
+</body>
+</html>
